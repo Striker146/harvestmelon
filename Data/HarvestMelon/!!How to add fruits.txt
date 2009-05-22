@@ -1,0 +1,89 @@
+FRUIT EXAMPLE, duplicate of melon, if you want to make a fruit.
+
+
+
+"Melon" 
+	{
+		"Fruitname"		"Melon"
+		"FModel"		"models/props_junk/watermelon01.mdl"
+		"PModel"		"models/props/CS_militia/fern01.mdl"
+		"GrowTime"		"3"
+		"Children"		"3"
+		"Regrow"		"0"
+		"RegrowTime"		"0"
+		"FValue"		"3"
+		"FHealth"		"100"
+		"SeedName"		"Melon Seed"
+		"SeedCost"		"1"
+		"PStartHeight"		"-10"
+		"PEndHeight"		"20"
+		"FHeight"		"20"
+		"FDistFromP"		"25"
+
+	}
+
+
+Above is exactly how the melon fruit looks like (and your fruit should look somthing like this, the fruits.txt can't take comments so don't copy what's below!), i'll explain each part of it.
+
+
+
+
+"Melon"
+	This is what the game reffers the fruit as,
+
+	{
+		This tells the game that all of the below settings apply this fruit, and only this fruit.
+
+		"Fruitname"	"Melon"
+			What the players know the fruit as. 
+
+		"FModel"	"models/props_junk/watermelon01.mdl"
+			the model of the fruit
+
+		"PModel"	"models/props/CS_militia/fern01.mdl"
+			the plant's model
+
+		"GrowTime"	"3"
+			how many days it takes to grow
+
+		"Children"	"3"
+			how many fruits grow off of an individual plant
+
+		"Regrow"	"0"
+			if 1, regrows. if 0, doesn't.
+
+		"RegrowTime"	"0"
+			how many days to regrow.
+		"FValue"	"3"
+			the value of the fruit for selling via shipping bin
+
+		"FHealth"	"100"
+			how much health the fruit has.
+
+		"SeedName"	"Melon Seed"
+			the name of the plant's seed.
+
+		"SeedCost"	"1"
+			how much the seed costs
+
+		"PStartHeight"	"-10"
+			what height the plant starts growing at.
+
+		"PEndHeight"	"20"
+			how tall the fully grown plant is, in units.
+
+		"FHeight"	"20"
+			how high off of the ground the fruit spawns.
+
+		"FDistFromP"	"25"
+			how far away from the plant fruits will spawn.
+
+	}
+		This tells the game that we're done editing the properties of this fruit.
+
+
+
+
+After making a fruit, you don't need to reload the gamemode to see the fruit in action, all you have to do is use the "HM_Update_Fruits" command in game and then you'll get to test your fruit to see if it works!
+
+As an additional note, the variables inside the fruit table (between the { and }) Don't have to be in any particular order, you could have the cost first, then name after, if you really wanted to.

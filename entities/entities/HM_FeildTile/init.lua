@@ -1,5 +1,6 @@
 include("shared.lua")
 AddCSLuaFile("cl_init.lua")
+AddCSLuaFile("shared.lua")
 
 function ENT:SpawnFunction(plyPlayer,trTrace)
 local entSelf = ents.Create("HM_FeildTile")
