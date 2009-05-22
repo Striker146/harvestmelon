@@ -10,7 +10,7 @@ if (CLIENT) then
 	SWEP.DrawCrosshair = false
 end
 
-SWEP.Author = "Paranoid*"
+SWEP.Author = "Paranoid*, edited by eb"
 SWEP.Instructions = "Whack people :D"
 SWEP.Contact = "Paranoid@gamersorigin.com"
 SWEP.Purpose = "Request"
@@ -57,8 +57,11 @@ function SWEP:PrimaryAttack()
 	bullet.Tracer = 0
 	bullet.Force  = 100
 	bullet.Damage = 25
-	HMTakeStamina(self:GetOwner())
-
+	
+	if SERVER then
+		HMTakeStamina(self:GetOwner())
+	end
+	
 	local e = trace.Entity
 	if e ~= nil then
 		if (ValidEntity(e) and (trace.HitPos:Distance(self.Owner:GetShootPos()) <= 75)) then

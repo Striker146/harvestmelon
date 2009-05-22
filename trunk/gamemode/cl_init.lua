@@ -1,6 +1,9 @@
 if CLIENT then
-
 include("shared.lua")
+
+--day/night cycle with umessages, yaaay
+
+
 --HUD start
 	local function HarvestMelon_HUD()
 		--Stamina start
