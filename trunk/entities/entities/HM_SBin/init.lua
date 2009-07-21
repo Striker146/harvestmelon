@@ -2,11 +2,11 @@ include("shared.lua")
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 
-function ENT:SpawnFunction(plyPlayer,trTrace)
+function ENT:SpawnFunction(ply,tr)
 	local ent = ents.Create("HM_SBin")
 
-	ent:SetPos(trTrace.HitPos + (trTrace.HitNormal * 20))
-	ent.owner = plyPlayer
+	ent:SetPos(tr.HitPos + (tr.HitNormal * 20))
+	ent.owner = ply
 	ent:Spawn()
 
 	return entSelf
@@ -35,7 +35,7 @@ function ENT:Initialize()
 	local bin = ents.Create("prop_physics")
 	bin:PhysicsInit( SOLID_VPHYSICS )
 	bin:SetSolid( SOLID_VPHYSICS )
-	self:SetMoveType( MOVETYPE_VPHYSICS )
+	bin:SetMoveType( MOVETYPE_VPHYSICS )
 	bin:SetModel("models/props_wasteland/laundry_cart002.mdl")
 	bin:SetPos(self:GetPos() + Vector(0,0,13))
 	bin:SetAngles(self:GetAngles() + Vector(0,90,0))
