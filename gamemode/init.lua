@@ -1,20 +1,80 @@
 
 include("shared.lua")
 include("fruits.lua")
+include("time.lua")
+include("chatcommands.lua")
+include("money.lua")
+include("datamanagement.lua")
 
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 
-CreateConVar("HM_DayTime", "8", FCVAR_NOTIFY)
+CreateConVar("HM_DayTime", "4", FCVAR_NOTIFY)
+--IF.Items:SetMaxHeld(1)
 
---starting up..
+--[[TODO
+Incorperate Itemforge, this one's a biggie.
+	Add fruit items, preferabbly one sent that gets fed arguments, may not be possible.
+	Add rucksack and default the player to spawn with it, holds 40 items
+	Rucksack will need a way to put held items into it easily, a small rucksack item button you can click and drag stuff into would work.
+	Change all weapons into itemforge items.
+	Fix the itemforge gui breaking in game. turns out it's a problem with the addon, waiting for the dev to fix it/
+	
+GUI:
+	Day/night changes need to be transitioned.
+	Need to make a clock to display the in game time.
+	New days start at dawn code side, make it display new days 
+	
+General:
+	Vending machines need a temporary basic ui.
+	Players need a way to easily place farm plots, they can only plant in there. first one is free.
+	Plots need a cleanup function, 10 minutes after disconnect clean up the entry in the plot table, clear plants, junk, etc.
+	plots need to grow weeds and other small nuciances.
+	Players need houses! should come with a bed and a form of minimal storage.
+	Beds, when used, should put the player to sleep until 6 am the next day. restores stamina completely.
+	If all players are sleeping, skip to the next day
+	Need some sort of thing to keep player from getting bored while sleeping, maybe spectating or pong or somthing.
+	need to incorperate a skill system, shoudlen't be too hard.
+	There should be player classes, everyone can do most basic things, but each class has somthing that only it can do
+	Fruits should be edible, restores stamina and health
+	People should only be able to eat so much in a day. consider mimicing kol
+	consider alcohol.
+	Weather, some days it rains, other days are disasters.
+	Dropping most fruits and valubles should destroy them
+	Seasons
+	The game needs a in game debug gui. ability to create plants in game is needed, too.
+	
+Economy:
+	players shoulden't just give things to other players. (See: Stranded)
+	Have a trade function. and a gui to go with it.
+	Trade stands or player operated vending machines, owner sets the items to sell,  and for how much. items must be put in from rucksack.
+	
+Crafting:
+	Create a general crafting system.
+	
+	Smelting metals:
+	
+	Smithing:
+	
+	Plant breeding (melon + berry = melonberry seed):
+	
+	Animal breeding (hurhur) / taming:
+	
+	Brewing:
+	
+	Cooking:
+		Have players use a "stove" or somthing to combine 2 or more ingredients to cook somthing.
+		have hidden recipies, if the player cooks somthing no recipie matches, give them a "mistake"
+]]--
+
+--starting up.
 function HMStartup()
 	CheckDataDir()
 	HMDaysPassed = -1
 	HMUpdateFruits()
+	HMCreatePlotTable()
 	HMStartNewDay()
 	HMGetFruitProps()
-	--HMDumpFruitTable()
 end
 
 hook.Add( "Initialize", "HMStartup", HMStartup )
@@ -22,9 +82,22 @@ hook.Add( "Initialize", "HMStartup", HMStartup )
 
 --player respawn function
 function GM:PlayerSpawn(ply)
+	GAMEMODE:SetPlayerSpeed( ply, 250, 500 )
+	
+	hook.Call( "PlayerLoadout", GAMEMODE, ply )  
+	hook.Call( "PlayerSetModel", GAMEMODE, ply )  
+
+	umsg.Start("SendDayPhase", ply)
+		umsg.Long( CurDayPhase )
+	umsg.End()
+end
+
+function GM:PlayerLoadout( ply )
+	ply:RemoveAllAmmo()
 	ply:Give("weapon_physgun")
 	ply:Give("gmod_camera")
 	ply:Give("weapon_HM_Crowbar")
+	ply:Give("weapon_HM_WateringCan")
 	ply:Give("weapon_physcannon")
 	ply:Give("gmod_tool")
 	ply:SetNetworkedFloat("Stamina", 100)
@@ -32,7 +105,7 @@ end
 
 --player initial spawn function
 function HMInitSpawn(ply)
-	setMoney(ply, 10)
+	setMoney(ply, 110)
 end
 
 hook.Add("PlayerInitialSpawn","playerinitialspawn", HMInitSpawn)
@@ -81,7 +154,7 @@ function HMGetFruitProps()
 				
 				for inmy, mouf in pairs(v) do
 					if inmy == "seedcost" then
-						ValidFuritProps[tablesize]["SeedCost"] = mouf
+						ValidFruitProps[tablesize]["SeedCost"] = mouf
 					end
 				end
 			end
@@ -89,30 +162,12 @@ function HMGetFruitProps()
 	end
 end
 
-function HMGetFruitSeeds()
-	FruitSeeds = {}
-	for k,v in pairs(Fruits) do
-		for l,b in pairs(v) do
-			if l == "SeedName" then
-				local tablesize = tostring(table.Count(FruitSeeds))
-				if not ValidFruitProps[tablesize] then
-					ValidFruitProps[tablesize] = {}
-				end
-				ValidFruitProps[tablesize]["Seed"] = b
-				for cock,plz in pairs(v) do
-					if cock == "SeedCost" then
-						ValidFruitProps[tablesize]["Value"] = plz
-					end
-				end
-			end
-		end
-	end
+--tiny function, i know, here incase if i need it later.
+function HMCreatePlotTable()
+	Plots = {}
 end
 
-function HMMergeItemTables()
-
-end
-
+--this is used to make a copy of fruits.lua as data/harvestmelon/fruits.txt
 function HMDumpFruitTable()
 	local Data = Fruits
 	file.Write("HarvestMelon/Fruits.txt",util.TableToKeyValues(Data))
@@ -123,96 +178,120 @@ end
 --[[TABLE CREATION AND MANAGEMENT END]]--
 --------------------------------------------------------
 
-// Don't touch this until you get right to the bottom
 
-ChatCommands = {}
-
-function PushCmd(Cmd, Fun)
-	local Pos = table.Count(ChatCommands)
-	ChatCommands[Pos] = {}
-	ChatCommands[Pos][0] = Cmd
-	ChatCommands[Pos][1] = Fun
-end
-
-local function Said(Ply, Text, ToAll)
-	local KeyWords = {}
-	local Len = string.len(Text)
-	local Pos = 0
-	local LastEnd = 1
-	local Quote = false
-	
-	// Extract the 'Key Words', from which we can get a command name and any arguments that are provided
-	for i=1,Len do
-		local Char = string.sub(Text, i, i)
-		
-		if(Char == " " && !Quote || i == Len) then
-			KeyWords[Pos] = string.sub(Text, LastEnd, i)
-			
-			Pos = Pos + 1
-			LastEnd = i
-		end
-		
-		if(Char == "\"") then Quote = !Quote end
-	end
-	
-	local Args = {}
-	for j, w in pairs(KeyWords) do
-		if(j != 0) then
-			Args[j - 1] = string.Trim(w)
-		end
-	end
-	
-	for i, v in pairs(ChatCommands) do
-		if (string.Trim(KeyWords[0]) == v[0]) then
-			ChatCommands[i][1](Ply, Args)
-		end
-	end
-	
-	return Text
-end
-
-hook.Add("PlayerSay", "SaidCMD", Said);
-
-// Ok, it's safe to touch everything under here
-
-// Add each command you want to use by the PushCmd function, first parameter being the command name, the second being a function to carry out this command's task
-// The function will recieve two parameters, Ply the player who called it, and Args, which is a table containing every argument that was passed
-// It is recommended that you ensure the values are valid yourself within this function
-// Paramters are seperated using a space, however anything in "s will be regarded as one value
-// There you go Eb, enjoy <3
-
-local function FSay(Ply, Args)
-	Msg("You said "..Args[0].."\n")
-end
-PushCmd("!say", FSay)
-
-local function FTP(Ply, Args)
-	if(table.Count(Args) < 3) then return end
-	
-	Ply:SetPos(Vector(tonumber(Args[0]), tonumber(Args[1]), tonumber(Args[2])))
-end
-PushCmd("!tp", FTP)
-
-local function FPlant(Ply, Args)
-	if not Args[0] then return end
-	local planted = Plant(Ply, Args[0])
-	if not planted then return end
-end
-PushCmd("!plant", FPlant)
 
 function Plant(Ply, Fruit)
+	local proceed = true
+	local tr = Ply:GetEyeTrace()
+	local PVectors = nil
+	
+	--make sure the player is planting in an owned plot
+	for k,v in pairs(Plots) do
+		for no,u in pairs(v) do
+			if no == "Owner" then
+				if u == Ply:SteamID() then
+					for glamor, slammer in pairs(v) do
+						if glamor == "Vectors" then
+							PVectors = slammer
+						end
+					end
+				end
+			end
+		end
+	end
+	
+	if not PVectors then
+		proceed = false
+		Ply:ChatPrint("You need to plot a farm land to plant in!")
+	elseif PVectors then
+		local FV = tr.HitPos
+		local V1 = PVectors[1]
+		local V2 = PVectors[2]
+		local V3 = PVectors[3]
+		local V4 = PVectors[4]
+		proceed = false
+		
+		if (FV.x > V3.x) and (FV.x < V1.x) and  (FV.y > V3.y) and (FV.y < V1.y) and (FV.z < (V1.z + 150)) and (FV.z > (V1.z - 150)) then
+			proceed = true
+		else	
+		proceed = false
+		Ply:ChatPrint("You need to plant in one of your plots!")
+		end
+	end
+	
+	--We then check if the player is close enough to where he is looking to plant..
+	if tr.HitPos:Distance(Ply:GetPos()) >= 250 then
+		proceed = false
+		Ply:ChatPrint("Too Far away to plant!")
+	end
+	
+	--then if the ground is suitable to plant seeds
+	if not (tr.MatType == MAT_DIRT or tr.MatType == MAT_GRASS or tr.MatType == MAT_SAND) then 
+		proceed = false
+		Ply:ChatPrint("You can't plant there, the ground is too hard!")
+	end
+	
+	local trace = {} --yes, i used stranded to help me with this part.
+	trace.StartPos = tr.HitPos
+	trace.EndPos = trace.StartPos - Vector(0,0,100000)
+	trace.Mask = MASK_SOLID_BRUSHONLY
+	
+	groundtrace = util.TraceLine(trace)
+	
+	--no planting in they sky, or walls, jackasses.
+	if tr.HitPos.z - 10 <= groundtrace.HitPos.z then
+		
+	else
+		Ply:ChatPrint("You can't plant in the air!")
+		proceed = false
+	end
+	
+	local trace = {}
+	trace.StartPos = tr.HitPos + Vector(0,0,1)
+	trace.EndPos = trace.StartPos + Vector(0,0,100000)
+	
+	skytrace = util.TraceLine(trace)
+	
+	--make sure that the plant has sunlight.. doesn't work completely, needs a way to check if the skybox is hit
+	if skytrace.HitNonWorld or skytrace.Hit then
+		proceed = false
+		Ply:ChatPrint("Plants need sunlight, try planting outside.")
+	end
+	
+	local trace = {}
+	trace.start = tr.HitPos
+	trace.endpos = trace.start + Vector(0,0,1)
+	trace.mask = MASK_WATER
+
+	local watertrace = util.TraceLine(trace)
+
+	
+	--check if the player is trying to plant underwater
+	if watertrace.Hit then
+		proceed = false
+		Ply:ChatPrint("You can't plant underwater.")
+	end
+
 	for k,v in pairs(Fruits) do
+		--check if the player is trying to plant a valid plant
 		if string.lower(Fruit) == string.lower(k) then
-			local tr = Ply:GetEyeTrace()
 			local allents = ents.GetAll()
-			local proceed = true
+			--then check if other plants are too close
 			for k2,v2 in pairs(allents) do
-				if tr.HitPos:Distance(v2:GetPos()) <= 100 and v2:GetClass() == "hm_seed" then proceed = false end
+				if tr.HitPos:Distance(v2:GetPos()) <= 100 and v2:GetClass() == "hm_seed" then
+				Ply:ChatPrint("Too close to other plants!")
+					proceed = false
+				end
 			end
 			
 			if proceed then
 				local proceed2 = true
-				if (getMoney(Ply) - tonumber(Fruits[k]["seedcost"])) < 0 then proceed2 = false end
+				--finally, check if the player has enough money, this is temporary until items system is implemented.
+				if (getMoney(Ply) - tonumber(Fruits[k]["seedcost"])) < 0 then
+					proceed2 = false
+					Ply:ChatPrint("You need $"..Fruits[k]["seedcost"].." to plant that seed!")
+				end
+				--Everything checks out, PLANT!
 				if proceed2 then
 					removeMoney(Ply, tonumber(Fruits[k]["seedcost"]))
 					local ent = ents.Create("HM_Seed")
@@ -223,222 +302,18 @@ function Plant(Ply, Fruit)
 			end
 		end
 	end
-	if not ent then return 0 end
+	if not ent then return 0 end -- i forget what this is for =D
 end
 
--------------------------------------------
---[[DATA SAVE CODE START]]--
--------------------------------------------
---It's obvious that we're going to need to track data
---taken right from ebnetstats, should work perfectly.
-	--[[Debugger for when we run into problems.]]--
-	function DebugPrint(msg)
-		if (not StatsDebug) then return end
-		Msg("HM Debug: "..msg.."\n") 
-	end
-	
-	--[[Another debugger for outputting tables easily]]--
-	function DebugPrintTable(Data)
-		if (not StatsDebug) then return end
-		PrintTable(Data)
-	end
 
-	--[[New readfile thing]]--
-	function ReadFile(steamid)
-		local Data = util.KeyValuesToTable(file.Read("HarvestMelon/data.txt"))
-		local PData = Data[string.lower(steamid)]
-		DebugPrint("Reading "..PData["name"].."'s data, outputting contents:")
-		DebugPrintTable(PData)
-		return PData
-	end
-	
-	--[[function DataIntegretyCheck(Data) --WIP
-		local Problem
-		for PID, PlStTable in pairs(Data) do
-			for l, w in pairs(PlStTable) do
-				if () then
-				end
-			end
-		end
-	end]]--
-	
-	--[[New writefile thing]]--
-	function SaveData(pl)
-		local Data = (util.KeyValuesToTable(file.Read("HarvestMelon/data.txt")))
-		Data[string.lower(pl:SteamID())] = pl.PlayerStats
-		local PlayerData = Data[string.lower(pl:SteamID())]
-		PlayerData["name"] = pl:Nick()
-		file.Write("HMPlyData/data.txt",util.TableToKeyValues(Data))
-		DebugPrint("Saving "..PlayerData["name"].."'s data with:")
-		DebugPrintTable(PlayerData)
-	end
-	
-	hook.Add(	"PlayerDisconnected", "Save on disconnect", SaveData, ply)
-	
-	--[[]Saves all connected player's data for the routine saves.]]--
-	function SaveAllData()
-		local AllPlayers = player.GetAll()
-		for i, v in pairs(AllPlayers) do
-		SaveData(v)
-		end
-	end
-	
-	--Checks to make sure that all data has what it should, WIP
-	function ReadAllData(CheckData)
-		local Data = util.KeyValuesToTable(file.Read("HarvestMelon/data.txt"))
-		if CheckData then
-			local Problem = 0
-			DebugPrint("Reading ALL data, checking integrety.")
-			--local Problem = DataIntegretyCheck(Data)
-			if Problem then
-				DebugPrint("Some Data Missing, fixed.")
-			else
-				DebugPrint("All Data Correct")
-			end
-		else
-			DebugPrint("Reading ALL data.")
-		end
-		return Data
-	end
-	
-	--[[Adds new player data to the database]]--
-	function AddNewData(pl)
-		local Data = (util.KeyValuesToTable(file.Read("HarvestMelon/data.txt")))
-		Data[string.lower(pl:SteamID())] = {}
-		local PlayerData = Data[string.lower(pl:SteamID())]
-		PlayerData["name"] = pl:Nick()
-		pl.PlayerStats = PlayerData
-		file.Write("HarvestMelon/data.txt",util.TableToKeyValues(Data))
-		DebugPrint("Created stats entry for "..pl.PlayerStats["name"]..".")
-	end
-	
-	--[[Check if the stats directory is made..]]--	
-	function CheckDataDir()
-		if not (file.IsDir("HarvestMelon")) then
-			file.CreateDir("HarvestMelon")
-			Msg("Created PlayerData Directory!\n")
-		end
-		if not (file.Exists("HarvestMelon/data.txt")) then
-			file.Write("HarvestMelon/data.txt", "\"cocks\"{}")
-			Msg("Created PlayerData File!\n")
-		end
-	end
-	
-	
-	--[[Load player's stats file, if none, make the file.]]--
-	function LoadPlayerStats(pl)
-	local Data = KeyValuesToTable(file.Read("stats/stats.txt"))
-		if (Data[string.lower(pl:SteamID())] == nil) then
-			AddNewData(pl)
-			local Data = ReadFile(pl:SteamID())
-		else
-			local Data = ReadFile(pl:SteamID())
-			Data["name"] = pl:Nick()
-			pl.PlayerStats = Data
-			DebugPrint("Loading "..Data["name"].."'s HMData.")
-			SaveData(pl)
-		end
-		HMPlayerInitSpawn(ply)
-	end
-	--hook.Add( "PlayerInitialSpawn", "LoadPlayerStats", LoadPlayerStats )
-	
----------------------------------------
---[[DATA SAVE CODE END]]--
----------------------------------------
 
------------------------------------------------
---[[TIMEKEEPING/WEATHER CODE START]]--
------------------------------------------------
 
-	--Run once every day, Starts a new day and parses all time info for the day
-	function HMStartNewDay(NDW)
-		local ParseDayTime = (GetConVarNumber("HM_DayTime") * 60)
-		local DayStartTime = CurTime()
-		local DayNigTime = math.floor(ParseDayTime / 2.6)
-		local DawDusTime = math.floor(ParseDayTime / 8)
-		local HMTime = math.floor(CurTime() - DayStartTime)
-		local HMNextDayWeather = NDW
-		--SetNetworkedFloat("Time", HMTime)
-
-		if HMNextDayWeather == 1 then
-			for k, v in pairs(player.GetAll()) do
-
-			end
-		elseif HMNextDayWeather == 2 then
-			for k, v in pairs(player.GetAll()) do
-
-			end
-		else
-			for k, v in pairs(player.GetAll()) do
-
-			end
-		end
-		local Seeds = ents.FindByClass("HM_Seed")
-		for k,v in pairs(Seeds) do
-			v:Grow()
-		end
-		local Bins = ents.FindByClass("HM_SBin")
-		for k,v in pairs(Bins) do
-			v:PayOwner()
-		end
-		HMNextDayWeather = math.floor(math.random(1,2))
-		HMDawnStart(DayNigTime, DawDusTime, HMNextDayWeather)
-	end
-	
-	--New WIP Timechecking code, uses timers instead of a think, should be much more efficient
-
-	function HMDawnStart(DNT, DDT, NDW)
-		local plys = player.GetAll()
-		for k,v in pairs(plys) do
-			v:ConCommand("pp_colormod_contrast 1")
-			v:ConCommand("pp_colormod_addr 0")
-			v:ConCommand("pp_colormod_addg 5")
-			v:ConCommand("pp_colormod_addb 10")
-			v:ConCommand("pp_colormod 1")
-		end
-	timer.Create("DawnEndTimer", DDT, 1, HMDayStart, DNT, DDT, NDW)
-	end
-	
-	function HMDayStart(DNT, DDT, NDW)
-		local plys = player.GetAll()
-		for k,v in pairs(plys) do
-			v:ConCommand("pp_colormod 0")
-		end
-	timer.Create("DayEndTimer", DNT, 1, HMDuskStart, DNT, DDT, NDW)
-	end
-	
-	function HMDuskStart(DNT, DDT, NDW)
-		local plys = player.GetAll()
-		for k,v in pairs(plys) do
-			v:ConCommand("pp_colormod_contrast 1")
-			v:ConCommand("pp_colormod_addr 10")
-			v:ConCommand("pp_colormod_addg 5")
-			v:ConCommand("pp_colormod_addb 0")
-			v:ConCommand("pp_colormod 1")
-		end
-	timer.Create("DuskEndTimer", DDT, 1, HMNightStart, DNT, NDW)
-	end
-	
-	function HMNightStart(DNT, NDW)
-		local plys = player.GetAll()
-		for k,v in pairs(plys) do
-			v:ConCommand("pp_colormod_contrast .25")
-			v:ConCommand("pp_colormod_addr 0")
-			v:ConCommand("pp_colormod_addg 5")
-			v:ConCommand("pp_colormod_addb 10")
-			v:ConCommand("pp_colormod 1")
-		end
-		timer.Create("NightEndTimer", DNT, 1, HMStartNewDay, NDW)
-	end
-	
---------------------------------------------
---[[TIMEKEEPING/WEATHER CODE END]]--
---------------------------------------------
 
 ----------------------------------
 --[[SHOPPING CODE START]]--
 ----------------------------------
 
+--A WIP buying from vending machine code, maybe shold be relocated into vending machine lua file.
 function BuyItem(tblArgs)
 	local Ply = tblArgs[1]
 	local Item = tblArgs[2]
@@ -451,79 +326,3 @@ concommand.Add("HM_VendBuy", BuyItem)
 ----------------------------------
 --[[SHOPPING CODE END]]--
 ----------------------------------
-
-----------------------------------------------------------
---[[MONEY MANAGEMENT CODE START]]--
-----------------------------------------------------------
-
-	--By spog, not bad. =D
-	//Returns the player's money.
-	function getMoney(ply)
-		return ply:GetNetworkedInt("Money")
-	end
-
-	//Sets the player's money to the given amount.
-	function setMoney(ply,amount)
-		ply:SetNetworkedInt("Money", amount)
-	end
-
-	//Adds the given amount to a player's money.
-	function addMoney(ply,amount)
-		ply:SetNetworkedInt("Money", (getMoney(ply) + amount))
-	end
-
-	//Removes the given amount from a player's money.
-	//Will not give a player negative money. Returns 1 on success; 0 on failure.
-	function removeMoney(ply,amount)
-		if getMoney(ply) >= amount then
-			ply:SetNetworkedInt("Money", (getMoney(ply) - amount))
-			return 1
-		else
-			return 0
-		end
-	end
-
-	//Removes the given amount from a player's money. Will send player into negatives.
-	function forceRemoveMoney(ply,amount)
-		ply:SetNetworkedInt("Money", (getMoney(ply) - amount))
-	end
-
-	//Removes the given amount from plyGive and gives it to plyTake.
-	//Has error checking. Returns 1 on success, 0 on failure.
-	function transferMoney(plyGive,plyTake,amount)
-		if removeMoney(plyGive,amount) == 1 then
-			addMoney(plyTake,amount)
-			return 1
-		else
-			return 0 
-		end
-	end
-
---------------------------------------------------------
---[[MONEY MANAGEMENT CODE END]]--
---------------------------------------------------------
-
---very very wip code, 
-function HM_PlotFarmland(ply, Args)
-	local tr = ply:GetEyeTrace()
-	local hitpos = tr.HitPos
-	local Vectors = {}
-	Vectors[1] = Vector(tonumber(Args[0]),tonumber(Args[1]),hitpos.z)
-	Vectors[2] = Vector(tonumber(Args[2]),tonumber(Args[3]),hitpos.z)
-	Vectors[3] = Vector(tonumber(Args[0]) + tonumber(Args[2]), tonumber(Args[1]), hitpos.z)
-	Vectors[4] = Vector(tonumber(Args[0]), tonumber(Args[1]) + tonumber(Args[3]), hitpos.z)
-
-
-	for k,v in pairs(Vectors) do
-		local pole = ents.Create("prop_physics")
-		pole:SetModel("models/props_docks/channelmarker_gib01.mdl")
-		pole:SetPos(v)
-		pole:Spawn()
-		local phys = pole:GetPhysicsObject()
-		if pole:IsValid() then
-			phys:EnableMotion(false)
-		end
-	end
-end
-
-PushCmd("!plot", HM_PlotFarmland)
